@@ -11,9 +11,9 @@ try:
     print(connection)
 
     # delete existing database
-    delete_db_query = "DROP DATABASE flights"
-    with connection.cursor() as cursor:
-        cursor.execute(delete_db_query)
+    # delete_db_query = "DROP DATABASE flights"
+    # with connection.cursor() as cursor:
+    #     cursor.execute(delete_db_query)
 
     # create new database
     create_db_query = "CREATE DATABASE flights"

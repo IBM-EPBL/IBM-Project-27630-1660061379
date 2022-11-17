@@ -2,21 +2,22 @@
 {% block content %}
         <div align="center">
           <div align="center" class="border">
-             {% if msg %}
-             <div class="alert alert-info alert-dismissible fade show" role="alert">
-                <strong>{{ msg }}</strong>
-                <button type="button" class="close" data-dismiss="alert" aria-label="Close">
-                  <span aria-hidden="true">&times;</span>
-                </button>
-              </div>
-            {% endif %}
+            <div class="header"></div>
+            {% if msg %}
+            <div class="alert alert-info alert-dismissible fade show" role="alert">
+               <h1 class="alert-msg">{{ msg }}</h1>
+               <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+                 <span aria-hidden="true">&times;</span>
+               </button>
+             </div>
+           {% endif %}
                <div class="home-content">
-                  <h1><strong>Flight Delay Prediction System</strong></h1>
+                  <h1 style="font-size:30px"><strong>Flight Delay Prediction System</strong></h1>
                   <div class="intro-content"></div>
-                     <h2>This system is a one-stop platform to predict the delays of all flights. <br><br>
-                     A complete video demonstration for using the website is attached below. <br></h2>
+                     <h3>This system is a one-stop platform to predict the delays of all flights. <br><br>
+                     A complete video demonstration for using the website is attached below. <br></h3>
                   <div><br><br>
-                  <iframe width="50%" height="45%" align = "center" src="https://www.youtube.com/embed/PgAZ8KzfhO8" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe><br>
-          </div>
+                  <img src="{{url_for('static', filename='flight.gif')}}" align="middle" width="700" height="400"/>            
+                </div>
         </div>
 {% endblock %}
