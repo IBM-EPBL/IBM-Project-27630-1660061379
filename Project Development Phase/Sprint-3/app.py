@@ -37,7 +37,6 @@ def get_details_from_csv(orig_airport, dest_airport, fl_num, tail_num):
     op = df[(df['ORIGIN']==orig_airport) & (df['DEST']==dest_airport) & (df['FL_NUM']==fl_num) & (df['TAIL_NUM']==tail_num)]
     if len(op)==0:
         return 0
-    print(op['CRS_ARR_TIME'])
     return [op['CRS_ARR_TIME'].tolist(), op['CRS_DEP_TIME'].tolist()]
 
 # creating instance of MySql
@@ -148,9 +147,7 @@ def predict():
     # departure date
     format_date = "%Y-%m-%d"
     dep_date = datetime.datetime.strptime(request.form['dep_date'], format_date)
-    month = int(dep_date.date().month)
-    day_of_month = int(dep_date.date().day)
-
+    
     # actual dep time
     format_time = "%H:%M"
     dep_time = datetime.datetime.strptime(request.form['dep_time'], format_time)
@@ -160,20 +157,15 @@ def predict():
 
     # fl num
     fl_num = int(request.form['fl_num'])
-    print(type(fl_num))
 
     # tail num
     tail_num = request.form['tail_num']
-    print(type(tail_num))
 
     # orig airport
     orig_airport = str(request.form.get('orig-airp'))
-    print(orig_airport=='ATL')
 
     # dest airport
     dest_airport = str(request.form.get('dest-airp'))
-    print(type(dest_airport))
-
     crs_time = get_details_from_csv(orig_airport,dest_airport,fl_num,tail_num)
     if crs_time==0:
         return render_template('details.html', msg='Enter correct Flight details!', active_page='details', title="Details", origin_airports=origin_airports, dest_airports=destination_airports)
@@ -194,7 +186,6 @@ def predict():
 
     X = [[crs_departure_time, departure_time, departure_delay, 
          dep_del15, crs_arrival_time]]
-    print(X)
 
     model = joblib.load('flight.pkl')
     predicted = model.predict(X)[0]

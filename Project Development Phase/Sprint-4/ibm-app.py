@@ -1,7 +1,7 @@
 import flask
 import joblib
-import requests
 import MySQLdb.cursors
+import requests
 import re
 import pandas as pd
 from flask import request, render_template, Flask, redirect, url_for, session, flash
@@ -9,12 +9,14 @@ from flask_mysqldb import MySQL
 from flask_cors import CORS
 import datetime
 
+# NOTE: you must manually set API_KEY below using information retrieved from your IBM Cloud account.
 API_KEY = "tCzEer0P5KjeQ_Tu6f8W9HK24TQ1Ds_Wi311f1_mS5UI"
 token_response = requests.post('https://iam.cloud.ibm.com/identity/token', data={"apikey":
-API_KEY, "grant_type": 'urn:ibm:params:oauth:grant-type:apikey'})
+ API_KEY, "grant_type": 'urn:ibm:params:oauth:grant-type:apikey'})
 mltoken = token_response.json()["access_token"]
 
 header = {'Content-Type': 'application/json', 'Authorization': 'Bearer ' + mltoken}
+
 
 # setting a new instance of Flask
 app = flask.Flask(__name__, static_url_path="")
@@ -28,11 +30,23 @@ with open('secret.txt', 'r') as f:
     user = line[0]
     password = line[1]
 
+#reading airport details
+df = pd.read_csv("flightdata.csv")
+origin_airports = df['ORIGIN'].unique()
+destination_airports = df['DEST'].unique()
+
 # setting config values
 app.config['MYSQL_HOST'] = 'localhost'
 app.config['MYSQL_USER'] = user
 app.config['MYSQL_PASSWORD'] = password
 app.config['MYSQL_DB'] = 'flights'
+
+# get details from the dataset
+def get_details_from_csv(orig_airport, dest_airport, fl_num, tail_num):
+    op = df[(df['ORIGIN']==orig_airport) & (df['DEST']==dest_airport) & (df['FL_NUM']==fl_num) & (df['TAIL_NUM']==tail_num)]
+    if len(op)==0:
+        return 0
+    return [op['CRS_ARR_TIME'].tolist(), op['CRS_DEP_TIME'].tolist()]
 
 # creating instance of MySql
 mysql = MySQL(app)
@@ -40,7 +54,7 @@ mysql = MySQL(app)
 # home page route
 @app.route('/', methods=["GET"])
 def sendHome():
-    return render_template('index.html', active_page="home", title="Welcome to FDP System!")
+    return render_template('index.html', active_page="home", title="Welcome to FDP System!", msg="Welcome Onboard!")
 
 # Login page
 @app.route('/login', methods=['GET', 'POST'])
@@ -61,11 +75,12 @@ def login():
             session['loggedin'] = True
             session['id'] = account['id']
             session['name'] = account['name']
-            msg = 'Logged in successfully!'
+            msg = 'Logged in successfully! Head out to Predict!'
             # if predict was selected before
             if 'pending' in session.keys():
                 redirect(url_for('predict'))
-                return render_template('details.html', msg=session['name'], active_page='details', title="Flight Details")
+                session.pop('pending', None)
+                return render_template('details.html', msg='Hi, '+session['name'], active_page='details', title="Flight Details", origin_airports=origin_airports, dest_airports=destination_airports)
             redirect(url_for('sendHome'))
             return render_template('index.html', msg=msg, active_page='home', title="Welcome to FDP System!")
         else:
@@ -76,11 +91,12 @@ def login():
 # logout   
 @app.route('/logout')
 def logout():
-    session.pop('loggedin', None)
+    if 'loggedin' not in session.keys():
+        return render_template('login.html', msg='You need to login!!', active_page='login', title="Login") 
     session.pop('id', None)
     session.pop('name', None)
-    session.pop('pending', None)
-    msg = 'Successfully Logged out!'
+    session.pop('loggedin', None)
+    msg = 'Thank you, See you again!'
     redirect(url_for('sendHome'))
     return render_template('index.html', msg=msg, active_page='home', title="Welcome to FDP System!")
 
@@ -122,76 +138,75 @@ def register():
     redirect(url_for('register'))
     return render_template('register.html', msg = msg, active_page='register', title="Signup")
 
-# predicting the labels
-@app.route('/predict', methods=["POST"])
-def predict():
-
-    format_date = "%Y-%m-%d"
-    dep_date = datetime.datetime.strptime(request.form['dep_date'], format_date)
-    month = int(dep_date.date().month)
-    day_of_month = int(dep_date.date().day)
-
-    format_time = "%H:%M"
-    crs_dep_time = datetime.datetime.strptime(request.form['crs_dep_time'], format_time)
-    hour = crs_dep_time.time().hour
-    minute = crs_dep_time.time().minute
-    crs_departure_time = hour*100+minute
-
-    format_time = "%H:%M"
-    crs_arr_time = datetime.datetime.strptime(request.form['crs_arr_time'], format_time)
-    hour = crs_arr_time.time().hour
-    minute = crs_arr_time.time().minute
-    crs_arrival_time = hour*100+minute
-
-    format_time = "%H:%M"
-    dep_time = datetime.datetime.strptime(request.form['dep_time'], format_time)
-    hour = dep_time.time().hour
-    minute = dep_time.time().minute
-    departure_time = hour*100+minute
-
-    departure_delay = crs_departure_time - departure_time
-    if(departure_delay>15):
-        dep_del15 = 1
-    else:
-        dep_del15 = 0
-    
-    cancelled = request.form['cancelled']
-    if(cancelled == 'Yes'):
-        cancelled = 1
-    else:
-        cancelled = 0
-    
-    diverted = request.form['diverted']
-    if(diverted == 'Yes'):
-        diverted = 1
-    else:
-        diverted = 0
-
-    X = [[month, day_of_month, crs_departure_time, departure_time, departure_delay, 
-         dep_del15, crs_arrival_time, cancelled, diverted]]
-    payload_scoring = {"input_data": [{"field": [['month', 'day_of_month', 'crs_departure_time', 'departure_time', 'departure_delay', 
-         'dep_del15', 'crs_arrival_time', 'cancelled', 'diverted']], "values": X}]}
-
-    response_scoring = requests.post('https://us-south.ml.cloud.ibm.com/ml/v4/deployments/0b4a580c-18db-4a71-92a9-0d006bd0c06d/predictions?version=2022-11-13', json=payload_scoring,
-    headers={'Authorization': 'Bearer ' + mltoken})
-    print(response_scoring)
-    predictions = response_scoring.json()
-    predicted = predictions['predictions'][0]['values'][0][0]
-
-    # model = joblib.load('flight.pkl')
-    # predicted = model.predict(X)[0]
-    redirect(url_for('details'))
-    return render_template("details.html", active_page='details', title="Details", predict=predicted, msg=session['name'])
-
+#details page
 @app.route('/details', methods=["GET"])
 def details():
     msg = 'Please log in or signup to continue!'
     if 'loggedin' in session.keys():
         redirect(url_for('details'))
-        return render_template("details.html", active_page='details', title="Details", msg=session['name'])
+        return render_template("details.html", active_page='details', title="Details", msg='Hi, '+session['name'], origin_airports=origin_airports, dest_airports=destination_airports)
     session['pending'] = True
     redirect(url_for('login'))
     return render_template('login.html', msg=msg, active_page='login', title="Login")
+
+# predicting the labels
+@app.route('/predict', methods=["POST"])
+def predict():
+
+    # departure date
+    format_date = "%Y-%m-%d"
+    dep_date = datetime.datetime.strptime(request.form['dep_date'], format_date)
+    month = int(dep_date.date().month)
+    day_of_month = int(dep_date.date().day)
+
+    # actual dep time
+    format_time = "%H:%M"
+    dep_time = datetime.datetime.strptime(request.form['dep_time'], format_time)
+    dep_hour = dep_time.time().hour
+    dep_minute = dep_time.time().minute
+    departure_time = dep_hour*100+dep_minute
+
+    # fl num
+    fl_num = int(request.form['fl_num'])
+
+    # tail num
+    tail_num = request.form['tail_num']
+
+    # orig airport
+    orig_airport = str(request.form.get('orig-airp'))
+
+    # dest airport
+    dest_airport = str(request.form.get('dest-airp'))
+    crs_time = get_details_from_csv(orig_airport,dest_airport,fl_num,tail_num)
+    if crs_time==0:
+        return render_template('details.html', msg='Enter correct Flight details!', active_page='details', title="Details", origin_airports=origin_airports, dest_airports=destination_airports)
+
+    format_time = "%H%M"
+    crs_departure_time = crs_time[1][0]
+    crs_dep = datetime.datetime.strptime(str(crs_departure_time), format_time)
+    crs_dep_hour = crs_dep.time().hour
+    crs_dep_minute = crs_dep.time().minute
+    
+    crs_arrival_time = crs_time[0][0]
+
+    departure_delay = (dep_minute-crs_dep_minute)+ 60*(dep_hour-crs_dep_hour)
+    if(departure_delay>15):
+        dep_del15 = 1
+    else:
+        dep_del15 = 0
+
+    X = [[crs_departure_time, departure_time, departure_delay, 
+         dep_del15, crs_arrival_time]]
+
+    payload_scoring = {"input_data": [{"field": [['crs_departure_time', 'departure_time', 'departure_delay', 
+         'dep_del15', 'crs_arrival_time']], "values": X}]}
+
+    response_scoring = requests.post('https://us-south.ml.cloud.ibm.com/ml/v4/deployments/478f707e-8eb4-4413-a744-ad5931a4dc03/predictions?version=2022-11-17', json=payload_scoring,
+    headers={'Authorization': 'Bearer ' + mltoken})
+    predictions = response_scoring.json()
+    predicted = predictions['predictions'][0]['values'][0][0]
+    redirect(url_for('details'))
+    return render_template("details.html", active_page='details', title="Details", predict=predicted, origin_airports=origin_airports, dest_airports=destination_airports)
 
 if __name__ == '__main__':
     app.run(debug=True)

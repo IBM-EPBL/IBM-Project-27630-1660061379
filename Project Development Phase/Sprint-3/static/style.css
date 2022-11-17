@@ -2,7 +2,7 @@ body {
     font-weight: 300;
     background-color: lightblue;
     font-family: 'Trebuchet MS', 'Lucida Sans Unicode', 'Lucida Grande', 'Lucida Sans', Arial, sans-serif;
-    overflow: hidden;
+    overflow-x: hidden;
 }
 
 li {
@@ -71,7 +71,6 @@ li {
 }
 
 .home-content {
-    margin-top: 5%;
     width: 100%;
 }
 
